@@ -1,0 +1,12 @@
+-- =====================================================================
+-- V1 — Init: pgcrypto extension + set_updated_at trigger function
+-- =====================================================================
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;

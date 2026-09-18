@@ -1,0 +1,57 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lovebox_db}
+    username: ${DB_USERNAME:lovebox}
+    password: ${DB_PASSWORD:lovebox}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration,classpath:db/seeder
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: true
+    repair-on-migrate: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:lovebox-super-secret-key-change-in-production-must-be-at-least-256-bits}
+    access-token-expiration-ms: 900000        # 15 minutes
+    refresh-token-expiration-ms: 604800000    # 7 days
+
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+
+  ai:
+    gemini-api-key: ${GEMINI_API_KEY:}
+    chat-model: gemini-2.0-flash
+    image-model: imagen-3.0-generate-001
+
+  payment:
+    bank-account: ${BANK_ACCOUNT:}
+    bank-name: ${BANK_NAME:}
+    account-name: ${ACCOUNT_NAME:Love Box}
+
+  notification:
+    resend-api-key: ${RESEND_API_KEY:}
+    from-email: ${FROM_EMAIL:noreply@lovebox.vn}
+    admin-email: ${ADMIN_EMAIL:admin@lovebox.vn}
+
+logging:
+  level:
+    com.lovebox: DEBUG
+    org.springframework.security: INFO
