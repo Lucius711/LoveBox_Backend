@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 public class AiProperties {
 
     private String geminiApiKey;
-    private String chatModel    = "gemini-2.0-flash";
-    private String imageModel   = "imagen-3.0-generate-001";
+    private String chatModel         = "gemini-2.0-flash";
+    private String fallbackChatModel = "gemini-1.5-flash";
+    private String imageModel   = "imagen-3.0-generate-002";
 }

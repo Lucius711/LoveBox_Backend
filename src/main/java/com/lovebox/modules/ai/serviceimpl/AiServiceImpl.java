@@ -141,7 +141,7 @@ public class AiServiceImpl implements AiService {
                         .build());
 
         try {
-            String uri = String.format("/v1beta/models/%s:predict?key=%s",
+            String uri = String.format("/v1/models/%s:predict?key=%s",
                     aiProperties.getImageModel(), aiProperties.getGeminiApiKey());
 
             Map<String, Object> result = geminiImageClient.post()

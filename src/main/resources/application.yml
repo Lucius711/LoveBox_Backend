@@ -38,8 +38,9 @@ app:
 
   ai:
     gemini-api-key: ${GEMINI_API_KEY:}
-    chat-model: gemini-2.0-flash
-    image-model: imagen-3.0-generate-001
+    chat-model: gemini-3.6-flash
+    fallback-chat-model: gemini-1.5-flash
+    image-model: imagen-3.0-generate-002
 
   payment:
     bank-account: ${BANK_ACCOUNT:}
