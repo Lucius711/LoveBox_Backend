@@ -1,6 +1,6 @@
 # Mỗi lần push lên main: chạy test → build image đẩy lên GHCR → SSH vào server kéo image mới và khởi động lại.
 # Secrets (Settings → Secrets and variables → Actions): VPS_HOST, VPS_PORT, VPS_USER, VPS_SSH_KEY
-# Trên VPS: đặt file .env trong ~/lentique-backend (DEPLOY_PATH bên dưới)
+# Trên VPS: file .env nằm trong ~/LoveBox_Backend (DEPLOY_PATH bên dưới)
 name: backend-ci
 
 on:
@@ -15,7 +15,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/lucius711/lovebox_backend
-  DEPLOY_PATH: lentique-backend   # tính từ thư mục home của VPS_USER
+  DEPLOY_PATH: LoveBox_Backend   # ~/LoveBox_Backend trên VPS (chứa .env), tính từ home của VPS_USER
 
 jobs:
   test:
