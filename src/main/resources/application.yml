@@ -63,6 +63,7 @@ app:
     from-email: ${FROM_EMAIL:noreply@lentique.vn}
 
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  cors-origins: ${CORS_ORIGINS:http://localhost:5173,https://lentique.shop,https://www.lentique.shop}
 
 logging:
   level:
