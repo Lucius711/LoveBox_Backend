@@ -11,7 +11,7 @@ public final class Vocab {
     private Vocab() {}
 
     public static final List<String> CATEGORIES = List.of(
-            "Áo dài", "Đầm dạ hội", "Váy dự tiệc", "Veston", "Đồ Cosplay/Sự kiện", "Áo cưới", "Set công sở");
+            "Áo dài", "Đầm dạ hội", "Váy dự tiệc", "Veston", "Đồ Cosplay/Sự kiện", "Áo cưới", "Set công sở", "Đầm công sở");
     public static final List<String> STYLES = List.of(
             "Dễ thương", "Thanh lịch", "Cá tính", "Vintage", "Sexy", "Nàng thơ", "Sang trọng", "Kín đáo", "Nổi bật");
     public static final List<String> COLORS = List.of(
