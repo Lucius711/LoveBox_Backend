@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -43,9 +45,51 @@ public class AuthService {
     private java.util.List<String> adminEmails;
 
 
+    @Value("${app.google.client-id}") private String googleClientId;
+    @Value("${app.google.client-secret:}") private String googleClientSecret;
+    @Value("${app.google.redirect-uri:}") private String googleRedirectUri;
+    private final RestClient googleOAuth = RestClient.create("https://oauth2.googleapis.com");
+
     @Transactional
     public TokenResponse loginWithGoogle(GoogleLoginRequest request, HttpServletRequest httpRequest) {
-        GoogleIdToken.Payload payload = googleTokenVerifier.verify(request.getIdToken());
+        return loginWithIdToken(request.getIdToken(), httpRequest);
+    }
+
+    /** Luồng redirect: link đăng nhập Google của backend (redirect_uri = callback). */
+    public String googleAuthorizeUrl(String state) {
+        return org.springframework.web.util.UriComponentsBuilder.fromHttpUrl("https://accounts.google.com/o/oauth2/v2/auth")
+                .queryParam("client_id", googleClientId)
+                .queryParam("redirect_uri", googleRedirectUri)
+                .queryParam("response_type", "code")
+                .queryParam("scope", "openid email profile")
+                .queryParam("prompt", "select_account")
+                .queryParam("state", state)
+                .encode().build().toUriString();
+    }
+
+    /** Callback: đổi authorization code lấy id_token (server-to-server, có client secret) rồi đăng nhập. */
+    @Transactional
+    public TokenResponse loginWithGoogleCode(String code, HttpServletRequest httpRequest) {
+        var form = new LinkedMultiValueMap<String, String>();
+        form.add("code", code);
+        form.add("client_id", googleClientId);
+        form.add("client_secret", googleClientSecret);
+        form.add("redirect_uri", googleRedirectUri);
+        form.add("grant_type", "authorization_code");
+        java.util.Map<?, ?> res;
+        try {
+            res = googleOAuth.post().uri("/token").contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(form).retrieve().body(java.util.Map.class);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.INVALID_GOOGLE_TOKEN);
+        }
+        Object idToken = res == null ? null : res.get("id_token");
+        if (idToken == null) throw new AppException(ErrorCode.INVALID_GOOGLE_TOKEN);
+        return loginWithIdToken(idToken.toString(), httpRequest);
+    }
+
+    private TokenResponse loginWithIdToken(String idToken, HttpServletRequest httpRequest) {
+        GoogleIdToken.Payload payload = googleTokenVerifier.verify(idToken);
         if (payload == null) {
             throw new AppException(ErrorCode.INVALID_GOOGLE_TOKEN);
         }
