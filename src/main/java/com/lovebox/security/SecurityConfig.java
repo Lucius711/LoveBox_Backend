@@ -7,6 +7,7 @@ import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -41,40 +42,24 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Allow async re-dispatches (required for SseEmitter / DeferredResult)
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
-                        .requestMatchers(
-                                "/auth/**",
-                                "/catalog/**",
-                                "/greeting-wishes/qr/**",
-                                "/actuator/health"
-                        ).permitAll()
+                        .requestMatchers("/auth/google", "/auth/refresh", "/payment/payos-webhook").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/owner/**").hasAnyRole("OWNER", "ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            response.setCharacterEncoding("UTF-8");
-                            ErrorCode code = ErrorCode.UNAUTHORIZED;
-                            response.getWriter().write(
-                                    objectMapper.writeValueAsString(
-                                            ApiResponse.error(code.getCode(), code.getMessage())
-                                    )
-                            );
-                        })
-                        .accessDeniedHandler((request, response, accessDeniedException) -> {
-                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            response.setCharacterEncoding("UTF-8");
-                            ErrorCode code = ErrorCode.FORBIDDEN;
-                            response.getWriter().write(
-                                    objectMapper.writeValueAsString(
-                                            ApiResponse.error(code.getCode(), code.getMessage())
-                                    )
-                            );
-                        })
-                )
+                        .authenticationEntryPoint((req, res, e) -> writeError(res, ErrorCode.UNAUTHORIZED))
+                        .accessDeniedHandler((req, res, e) -> writeError(res, ErrorCode.FORBIDDEN)))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
+    }
+
+    private void writeError(HttpServletResponse res, ErrorCode code) throws java.io.IOException {
+        res.setStatus(code.getHttpStatus().value());
+        res.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        res.setCharacterEncoding("UTF-8");
+        res.getWriter().write(objectMapper.writeValueAsString(ApiResponse.error(code.getCode(), code.getMessage())));
     }
 
     @Bean

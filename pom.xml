@@ -15,12 +15,11 @@
     <artifactId>lovebox-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>lovebox-backend</name>
-    <description>Love Box - AI-powered personalized gift box platform</description>
+    <description>Lentique - nền tảng cho thuê đồ tích hợp AI</description>
 
     <properties>
         <java.version>17</java.version>
         <jjwt.version>0.12.5</jjwt.version>
-        <google-auth.version>1.23.0</google-auth.version>
     </properties>
 
     <dependencies>
@@ -81,11 +80,6 @@
 
         <!-- Google Auth Library -->
         <dependency>
-            <groupId>com.google.auth</groupId>
-            <artifactId>google-auth-library-oauth2-http</artifactId>
-            <version>${google-auth.version}</version>
-        </dependency>
-        <dependency>
             <groupId>com.google.api-client</groupId>
             <artifactId>google-api-client</artifactId>
             <version>2.4.0</version>
@@ -115,6 +109,12 @@
             <artifactId>spring-dotenv</artifactId>
             <version>4.0.0</version>
         </dependency>
+        <!-- Cloudflare R2 (S3-compatible) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.31.0</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -130,34 +130,6 @@
                         </exclude>
                     </excludes>
                 </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.flywaydb</groupId>
-                <artifactId>flyway-maven-plugin</artifactId>
-                <version>10.10.0</version>
-                <configuration>
-                    <url>jdbc:postgresql://localhost:5432/lovebox_data</url>
-                    <user>postgres</user>
-                    <password>postgres</password>
-                    <locations>
-                        <location>classpath:db/migration</location>
-                        <location>classpath:db/seeder</location>
-                    </locations>
-                    <outOfOrder>true</outOfOrder>
-                </configuration>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.flywaydb</groupId>
-                        <artifactId>flyway-database-postgresql</artifactId>
-                        <version>10.10.0</version>
-                    </dependency>
-                    <dependency>
-                        <groupId>org.postgresql</groupId>
-                        <artifactId>postgresql</artifactId>
-                        <version>42.7.3</version>
-                    </dependency>
-                </dependencies>
             </plugin>
         </plugins>
     </build>

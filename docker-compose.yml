@@ -1,0 +1,26 @@
+# Backend + Redis. Postgres dùng DB có sẵn: điền DB_HOST trong .env
+# (Postgres chạy trên chính máy chủ → DB_HOST=host.docker.internal)
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/lucius711/lovebox_backend:latest}
+    build: .
+    env_file: .env
+    environment:
+      SERVER_PORT: ${SERVER_PORT:-7070}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    ports:
+      - "${SERVER_PORT:-7070}:7070"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:

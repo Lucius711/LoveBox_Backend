@@ -21,8 +21,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
-        log.warn("AppException: code={}, message={}", ex.getErrorCode().getCode(), ex.getMessage());
         ErrorCode errorCode = ex.getErrorCode();
+        if (errorCode.getHttpStatus().is5xxServerError())
+            log.warn("AppException: code={}, message={}", errorCode.getCode(), ex.getMessage());
+        else
+            log.debug("AppException: code={}, message={}", errorCode.getCode(), ex.getMessage());
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(ApiResponse.error(errorCode.getCode(), ex.getMessage()));
@@ -64,6 +67,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage()));
+    }
+
+    @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.web.multipart.MaxUploadSizeExceededException.class})
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(Exception ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(ErrorCode.VALIDATION_ERROR.getCode(), ErrorCode.VALIDATION_ERROR.getMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(Exception ex) {
+        return ResponseEntity.status(404)
+                .body(ApiResponse.error(ErrorCode.RESOURCE_NOT_FOUND.getCode(), ErrorCode.RESOURCE_NOT_FOUND.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

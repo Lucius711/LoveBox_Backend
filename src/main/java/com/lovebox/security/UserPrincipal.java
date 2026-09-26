@@ -16,22 +16,24 @@ public class UserPrincipal implements UserDetails {
     private final UUID id;
     private final String email;
     private final String name;
-    private final String googleSub;
+    private final String role;
 
-    public UserPrincipal(UUID id, String email, String name, String googleSub) {
+    public UserPrincipal(UUID id, String email, String name, String role) {
         this.id = id;
         this.email = email;
         this.name = name;
-        this.googleSub = googleSub;
+        this.role = role;
     }
 
     public static UserPrincipal from(User user) {
-        return new UserPrincipal(user.getId(), user.getEmail(), user.getName(), user.getGoogleSub());
+        return new UserPrincipal(user.getId(), user.getEmail(), user.getName(), user.getRole());
     }
+
+    public boolean isAdmin() { return User.ADMIN.equals(role); }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        return List.of(new SimpleGrantedAuthority("ROLE_" + role));
     }
 
     @Override public String getPassword() { return null; }

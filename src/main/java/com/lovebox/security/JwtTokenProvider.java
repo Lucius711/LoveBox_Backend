@@ -58,27 +58,9 @@ public class JwtTokenProvider {
                 .getPayload();
     }
 
-    public UUID extractUserId(String token) {
-        return UUID.fromString(parseToken(token).getSubject());
-    }
-
-    public boolean validateToken(String token) {
-        try {
-            parseToken(token);
-            return true;
-        } catch (ExpiredJwtException ex) {
-            log.warn("JWT expired: {}", ex.getMessage());
-        } catch (JwtException ex) {
-            log.warn("JWT invalid: {}", ex.getMessage());
-        }
-        return false;
-    }
-
-    public boolean isAccessToken(String token) {
-        try {
-            return "access".equals(parseToken(token).get("type", String.class));
-        } catch (JwtException e) {
-            return false;
-        }
+    /** Access token hợp lệ → userId; token hết hạn/sai chữ ký ném JwtException, là refresh token → null. */
+    public UUID accessTokenUserId(String token) {
+        Claims c = parseToken(token);
+        return "access".equals(c.get("type", String.class)) ? UUID.fromString(c.getSubject()) : null;
     }
 }

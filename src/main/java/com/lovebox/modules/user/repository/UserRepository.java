@@ -10,6 +10,4 @@ import java.util.UUID;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByGoogleSub(String googleSub);
-    Optional<User> findByEmail(String email);
-    boolean existsByGoogleSub(String googleSub);
 }
