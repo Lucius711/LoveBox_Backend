@@ -46,7 +46,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/google", "/auth/google/login", "/auth/google/callback", "/auth/refresh", "/payment/payos-webhook").permitAll()
                         .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/owner/**").hasAnyRole("OWNER", "ADMIN")
+                        .requestMatchers("/owner/**").hasRole("OWNER")   // admin chỉ duyệt, không đăng đồ
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex

@@ -35,6 +35,7 @@ public class BookingService {
     private final UserRepository userRepository;
     private final PayOSClient payOSClient;
     private final Mailer mailer;
+    private final com.lovebox.modules.notification.Notifications notifications;
 
     /**
      * Giỏ hàng → mỗi món thành 1 booking, cùng checkoutCode.
@@ -240,6 +241,7 @@ public class BookingService {
 
     private void notifyOwnerNewBooking(Booking b) {
         Product p = b.getProduct();
+        notifications.push(p.getOwner().getId(), "Có người thuê " + p.getName() + " (" + b.getStartDate() + " → " + b.getEndDate() + "), xác nhận đơn " + b.getCode(), "/account?tab=owner");
         mailer.send(p.getOwner().getEmail(), "Có người thuê " + p.getName(),
                 "<p>Món <b>" + p.getName() + "</b> vừa được đặt thuê (" + b.getCode() + ").</p>"
                         + "<p>Ngày nhận: <b>" + b.getStartDate() + "</b> → trả: <b>" + b.getEndDate() + "</b> (" + b.getDays() + " ngày)<br>"

@@ -3,6 +3,7 @@ package com.lovebox.modules.admin;
 import com.lovebox.common.response.ApiResponse;
 import com.lovebox.modules.booking.BookingDtos.*;
 import com.lovebox.modules.booking.BookingService;
+import com.lovebox.modules.owner.OwnerApplicationService;
 import com.lovebox.modules.product.ProductDtos.Detail;
 import com.lovebox.modules.product.ProductDtos.ReviewDecision;
 import com.lovebox.modules.product.ProductService;
@@ -16,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Chỉ ROLE_ADMIN (SecurityConfig): kiểm duyệt đồ, xử lý đơn/tranh chấp, dòng tiền. */
+/** Chỉ ROLE_ADMIN (SecurityConfig): kiểm duyệt đồ, duyệt đơn làm Chủ đồ, xử lý đơn/tranh chấp, dòng tiền. */
 @RestController
 @RequestMapping("/admin")
 @RequiredArgsConstructor
@@ -24,6 +25,7 @@ public class AdminController {
 
     private final ProductService productService;
     private final BookingService bookingService;
+    private final OwnerApplicationService ownerApplications;
 
     @GetMapping("/products")
     public ApiResponse<List<Detail>> products(@RequestParam(required = false) String status) {
@@ -33,6 +35,17 @@ public class AdminController {
     @PostMapping("/products/{id}/review")
     public ApiResponse<Detail> reviewProduct(@PathVariable UUID id, @RequestBody ReviewDecision decision) {
         return ApiResponse.success(productService.review(id, decision));
+    }
+
+    /** Đơn đăng ký làm Chủ đồ: duyệt → role OWNER; từ chối → bắt buộc lý do. */
+    @GetMapping("/owner-applications")
+    public ApiResponse<List<OwnerApplicationService.View>> ownerApplications(@RequestParam(required = false) String status) {
+        return ApiResponse.success(ownerApplications.list(status));
+    }
+
+    @PostMapping("/owner-applications/{id}/review")
+    public ApiResponse<OwnerApplicationService.View> reviewOwnerApplication(@PathVariable UUID id, @RequestBody ReviewDecision decision) {
+        return ApiResponse.success(ownerApplications.review(id, decision));
     }
 
     @GetMapping("/bookings")

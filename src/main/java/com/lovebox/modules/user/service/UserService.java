@@ -70,12 +70,4 @@ public class UserService {
     private static List<String> pick(List<String> values, List<String> vocab) {
         return values == null ? List.of() : values.stream().filter(vocab::contains).distinct().toList();
     }
-
-    /** Renter → Owner: bật tính năng "Đăng đồ cho thuê". Admin giữ nguyên. */
-    @Transactional
-    public UserResponse becomeOwner(UUID userId) {
-        User u = get(userId);
-        if (User.RENTER.equals(u.getRole())) u.setRole(User.OWNER);
-        return UserResponse.from(u);
-    }
 }

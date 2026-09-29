@@ -35,6 +35,7 @@ public class ProductService {
     private final ReviewRepository reviewRepository;
     private final UserRepository userRepository;
     private final Mailer mailer;
+    private final com.lovebox.modules.notification.Notifications notifications;
     private final R2Storage r2;
 
     public record Filter(String q, String category, String style, String color, String size, Long minPrice,
@@ -212,6 +213,8 @@ public class ProductService {
         Product p = find(id);
         p.setStatus(d.approve() ? Product.APPROVED : Product.REJECTED);
         p.setRejectReason(d.approve() ? null : d.reason());
+        notifications.push(p.getOwner().getId(), d.approve() ? "Món " + p.getName() + " đã được duyệt và lên kệ"
+                : "Món " + p.getName() + " chưa được duyệt: " + d.reason(), "/account?tab=owner");
         mailer.send(p.getOwner().getEmail(),
                 d.approve() ? "Món đồ của bạn đã được duyệt" : "Món đồ của bạn chưa được duyệt",
                 "<p>Món <b>" + p.getName() + "</b> " + (d.approve()

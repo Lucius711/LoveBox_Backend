@@ -1,5 +1,6 @@
 package com.lovebox.modules.user.controller;
 
+import com.lovebox.modules.owner.OwnerApplicationService;
 import com.lovebox.common.response.ApiResponse;
 import com.lovebox.modules.user.dto.request.StyleProfileRequest;
 import com.lovebox.modules.user.dto.request.UpdateProfileRequest;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final OwnerApplicationService ownerApplications;
 
     @GetMapping
     public ApiResponse<UserResponse> me(@AuthenticationPrincipal UserPrincipal p) {
@@ -35,8 +37,15 @@ public class UserController {
         return ApiResponse.success(userService.saveStyleProfile(p.getId(), req));
     }
 
-    @PostMapping("/become-owner")
-    public ApiResponse<UserResponse> becomeOwner(@AuthenticationPrincipal UserPrincipal p) {
-        return ApiResponse.success(userService.becomeOwner(p.getId()));
+    /** Đơn đăng ký làm Chủ đồ gần nhất (null nếu chưa gửi). */
+    @GetMapping("/owner-application")
+    public ApiResponse<OwnerApplicationService.View> ownerApplication(@AuthenticationPrincipal UserPrincipal p) {
+        return ApiResponse.success(ownerApplications.mine(p.getId()));
+    }
+
+    @PostMapping("/owner-application")
+    public ApiResponse<OwnerApplicationService.View> applyOwner(@AuthenticationPrincipal UserPrincipal p,
+                                                                @Valid @RequestBody OwnerApplicationService.Submit req) {
+        return ApiResponse.success("Đã gửi đơn, admin sẽ duyệt sớm", ownerApplications.submit(p.getId(), req));
     }
 }
