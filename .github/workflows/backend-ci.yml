@@ -60,7 +60,7 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: docker-compose.yml
+          source: docker-compose.yml,scripts/fake-traffic.sh
           target: ${{ env.DEPLOY_PATH }}
 
       - name: Deploy

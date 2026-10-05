@@ -2,9 +2,9 @@
 # Mỗi ngày: chọn TIMES giờ ngẫu nhiên (tăng dần), mỗi giờ đó thêm 3-4 lượt truy cập giả.
 # Cộng dồn đủ LIMIT lượt thì tự gỡ khỏi crontab và dừng hẳn.
 # vid có dấu 'seed-cron-…' để lọc/xoá: DELETE FROM dtb_daily_visitors WHERE visitor_id LIKE 'seed-cron-%';
-#   Cài trên VPS:   chmod +x ~/fake-traffic.sh && (crontab -l; echo '5 17 * * * ~/fake-traffic.sh') | crontab -
+#   Cài trên VPS:   (crontab -l; echo '5 17 * * * bash ~/LoveBox_Backend/scripts/fake-traffic.sh') | crontab -
 #                   (17:05 UTC = 00:05 giờ VN; VPS để giờ VN thì dùng '5 0 * * *')
-#   Chạy thử ngay:  ~/fake-traffic.sh now      (bỏ hết thời gian chờ)
+#   Chạy thử ngay:  bash ~/LoveBox_Backend/scripts/fake-traffic.sh now      (bỏ hết thời gian chờ)
 #   Xem đã thêm:    cat ~/.fake-traffic-count      Đếm lại từ 0: rm ~/.fake-traffic-count
 #   Log:            tail ~/fake-traffic.log
 LIMIT=${LIMIT:-628}
