@@ -43,7 +43,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Allow async re-dispatches (required for SseEmitter / DeferredResult)
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
-                        .requestMatchers("/auth/google", "/auth/google/login", "/auth/google/callback", "/auth/refresh", "/payment/payos-webhook").permitAll()
+                        .requestMatchers("/auth/google", "/auth/google/login", "/auth/google/callback", "/auth/refresh", "/payment/payos-webhook", "/track").permitAll()
                         .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/owner/**").hasRole("OWNER")   // admin chỉ duyệt, không đăng đồ
