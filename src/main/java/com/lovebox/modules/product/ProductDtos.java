@@ -20,7 +20,9 @@ public final class ProductDtos {
             @Min(50) @Max(200) int hipMax,
             @NotBlank String itemCondition,
             @Min(10_000) long retailPrice,
-            @Min(10_000) long rentPricePerDay,
+            long rentPricePerDay,   // RENT: ≥ 10.000 (kiểm ở ProductService.apply)
+            @Pattern(regexp = "RENT|SALE") String listingType,   // null = RENT; chỉ có tác dụng lúc tạo
+            long salePrice,         // SALE: ≥ 10.000
             @Min(50) @Max(100) int depositPercent,
             @NotEmpty(message = "Chọn ít nhất 1 màu") List<String> colors,
             @NotEmpty(message = "Chọn ít nhất 1 phong cách") List<String> styles,
@@ -30,11 +32,11 @@ public final class ProductDtos {
 
     public record Summary(UUID id, String name, String category, String size, long rentPricePerDay, long deposit,
                           String image, List<String> colors, List<String> styles, int rentCount, String status,
-                          String rejectReason, Instant createdAt) {
+                          String rejectReason, Instant createdAt, String listingType, long salePrice) {
         public static Summary from(Product p) {
             return new Summary(p.getId(), p.getName(), p.getCategory(), p.getSize(), p.getRentPricePerDay(),
                     p.deposit(), p.cover(), p.tagValues(Product.COLOR), p.tagValues(Product.STYLE), p.getRentCount(),
-                    p.getStatus(), p.getRejectReason(), p.getCreatedAt());
+                    p.getStatus(), p.getRejectReason(), p.getCreatedAt(), p.getListingType(), p.getSalePrice());
         }
     }
 
@@ -47,7 +49,7 @@ public final class ProductDtos {
                          long retailPrice, long rentPricePerDay, int depositPercent, long deposit,
                          List<String> colors, List<String> styles, List<String> occasions, List<String> features,
                          List<String> images, String status, String rejectReason, int rentCount, Owner owner,
-                         double avgRating, List<ReviewView> reviews) {}
+                         double avgRating, List<ReviewView> reviews, String listingType, long salePrice) {}
 
     public record ReviewDecision(boolean approve, String reason) {}
 

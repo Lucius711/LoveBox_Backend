@@ -11,7 +11,8 @@ import java.util.UUID;
 public final class BookingDtos {
     private BookingDtos() {}
 
-    public record CartItem(@NotNull UUID productId, @NotNull LocalDate startDate, @NotNull LocalDate endDate) {}
+    /** Đồ thanh lý (SALE) không cần ngày → startDate/endDate để trống. */
+    public record CartItem(@NotNull UUID productId, LocalDate startDate, LocalDate endDate) {}
 
     public record CheckoutRequest(
             @NotEmpty @Size(max = 10) List<@Valid CartItem> items,
@@ -29,7 +30,7 @@ public final class BookingDtos {
                        String recipientName, String phone, String address, String deliveryMethod,
                        String refundBankAccount, String refundBankName, String note, Long refundAmount,
                        Instant refundedAt, String refundStatus, boolean reviewed,
-                       Instant createdAt) {}
+                       Instant createdAt, String kind) {}
 
     public record CheckoutResponse(long checkoutCode, long totalAmount, String paymentMethod, String paymentStatus,
                                    String qrCode, String checkoutUrl, List<View> bookings) {}

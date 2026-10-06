@@ -38,6 +38,7 @@ public class Booking {
     @Column(name = "shipping_fee") private long shippingFee;
     @Column(name = "total_amount") private long totalAmount;
 
+    private String kind = "RENT";   // RENT | SALE (mua đồ thanh lý)
     private String status = "PENDING";
     @Column(name = "payment_method") private String paymentMethod;
     @Column(name = "payment_status") private String paymentStatus = "UNPAID";

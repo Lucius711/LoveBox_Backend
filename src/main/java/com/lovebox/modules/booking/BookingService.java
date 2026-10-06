@@ -51,39 +51,38 @@ public class BookingService {
         // sắp theo productId để 2 checkout đồng thời luôn khoá theo cùng thứ tự (tránh deadlock)
         List<CartItem> items = req.items().stream().sorted(Comparator.comparing(CartItem::productId)).toList();
         for (CartItem item : items) {
+            Product p = productRepository.findByIdForUpdate(item.productId())
+                    .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+            if (!Product.APPROVED.equals(p.getStatus()))
+                throw new AppException(ErrorCode.PRODUCT_NOT_AVAILABLE, p.getName() + (p.isSale() ? " đã có người mua" : " hiện không cho thuê"));
+            if (p.getOwner().getId().equals(renterId)) throw new AppException(ErrorCode.BOOKING_OWN_PRODUCT);
+            if (p.isSale()) {   // mua đứt: giữ món ngay (SOLD) để người khác không mua trùng; huỷ đơn → mở bán lại
+                Booking b = newBooking(req, checkoutCode, p, renter, today, today, created.isEmpty());
+                b.setKind(Product.SALE);
+                b.setDays(0);
+                b.setRentAmount(p.getSalePrice());
+                b.setDepositAmount(0);
+                b.setTotalAmount(b.getRentAmount() + b.getShippingFee());
+                p.setStatus(Product.SOLD);
+                created.add(b);
+                continue;
+            }
             try {
                 RentalRules.validateDates(item.startDate(), item.endDate(), today);
             } catch (IllegalArgumentException e) {
                 throw new AppException(ErrorCode.BOOKING_INVALID_DATES, e.getMessage());
             }
-            Product p = productRepository.findByIdForUpdate(item.productId())
-                    .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
-            if (!Product.APPROVED.equals(p.getStatus())) throw new AppException(ErrorCode.PRODUCT_NOT_AVAILABLE, p.getName() + " hiện không cho thuê");
-            if (p.getOwner().getId().equals(renterId)) throw new AppException(ErrorCode.BOOKING_OWN_PRODUCT);
             boolean clashInCart = created.stream().anyMatch(b -> b.getProduct().getId().equals(p.getId())
                     && RentalRules.overlaps(b.getStartDate(), b.getEndDate(), item.startDate(), item.endDate()));
             if (clashInCart || bookingRepository.existsConflict(p.getId(),
                     item.startDate().minusDays(RentalRules.BUFFER_DAYS), item.endDate().plusDays(RentalRules.BUFFER_DAYS)))
                 throw new AppException(ErrorCode.BOOKING_DATE_CONFLICT, p.getName() + ": " + ErrorCode.BOOKING_DATE_CONFLICT.getMessage());
 
-            Booking b = new Booking();
-            b.setCode("LT" + String.format("%08X", ThreadLocalRandom.current().nextInt()));
-            b.setCheckoutCode(checkoutCode);
-            b.setProduct(p);
-            b.setRenter(renter);
-            b.setStartDate(item.startDate());
-            b.setEndDate(item.endDate());
+            Booking b = newBooking(req, checkoutCode, p, renter, item.startDate(), item.endDate(), created.isEmpty());
             b.setDays(RentalRules.days(item.startDate(), item.endDate()));
             b.setRentAmount(p.getRentPricePerDay() * b.getDays());
             b.setDepositAmount(p.deposit());
-            b.setShippingFee(created.isEmpty() ? RentalRules.shippingFee(req.deliveryMethod()) : 0);
             b.setTotalAmount(b.getRentAmount() + b.getDepositAmount() + b.getShippingFee());
-            b.setPaymentMethod(req.paymentMethod());
-            b.setRecipientName(req.recipientName().trim());
-            b.setPhone(req.phone());
-            b.setAddress(req.address().trim());
-            b.setDeliveryMethod(req.deliveryMethod());
-            b.setNote(req.note());
             created.add(b);
         }
         try {
@@ -102,6 +101,25 @@ public class BookingService {
             created.forEach(this::notifyOwnerNewBooking);   // QR: báo chủ đồ khi đã nhận tiền (markPaid)
         }
         return toCheckout(created);
+    }
+
+    private static Booking newBooking(CheckoutRequest req, long checkoutCode, Product p, User renter,
+                                      LocalDate start, LocalDate end, boolean first) {
+        Booking b = new Booking();
+        b.setCode("LT" + String.format("%08X", ThreadLocalRandom.current().nextInt()));
+        b.setCheckoutCode(checkoutCode);
+        b.setProduct(p);
+        b.setRenter(renter);
+        b.setStartDate(start);
+        b.setEndDate(end);
+        b.setShippingFee(first ? RentalRules.shippingFee(req.deliveryMethod()) : 0);   // ship tính 1 lần / đơn
+        b.setPaymentMethod(req.paymentMethod());
+        b.setRecipientName(req.recipientName().trim());
+        b.setPhone(req.phone());
+        b.setAddress(req.address().trim());
+        b.setDeliveryMethod(req.deliveryMethod());
+        b.setNote(req.note());
+        return b;
     }
 
     public CheckoutResponse checkoutStatus(UUID renterId, long checkoutCode) {
@@ -126,7 +144,7 @@ public class BookingService {
             }
             if ("UNPAID".equals(b.getPaymentStatus()) && !"CANCELLED".equals(b.getStatus())) {
                 b.setPaymentStatus("PAID");
-                b.setDepositStatus("HELD");
+                if (!isSale(b)) b.setDepositStatus("HELD");
                 notifyOwnerNewBooking(b);
             }
         });
@@ -160,7 +178,9 @@ public class BookingService {
         Booking b = find(bookingId);
         boolean admin = actor.isAdmin();
         if (!admin && !b.getProduct().getOwner().getId().equals(actor.getId())) throw new AppException(ErrorCode.FORBIDDEN);
-        if (!RentalRules.canTransition(b.getStatus(), req.status(), admin))
+        boolean ok = isSale(b) ? RentalRules.canTransitionSale(b.getStatus(), req.status(), admin)
+                : RentalRules.canTransition(b.getStatus(), req.status(), admin);
+        if (!ok)
             throw new AppException(ErrorCode.BOOKING_STATUS_TRANSITION_INVALID,
                     "Không thể chuyển từ " + b.getStatus() + " sang " + req.status());
         if ("PAYOS".equals(b.getPaymentMethod()) && "UNPAID".equals(b.getPaymentStatus()) && !"CANCELLED".equals(req.status()))
@@ -169,7 +189,17 @@ public class BookingService {
         return view(b);
     }
 
+    private static boolean isSale(Booking b) { return Product.SALE.equals(b.getKind()); }
+
     private void apply(Booking b, String to, Long deduction, String note) {
+        if (isSale(b) && "COMPLETED".equals(to)) {   // đã giao tận tay người mua
+            if ("COD".equals(b.getPaymentMethod())) b.setPaymentStatus("PAID");
+            mailer.send(b.getProduct().getOwner().getEmail(), "Đã bán " + b.getProduct().getName(),
+                    "<p>Đơn mua <b>" + b.getProduct().getName() + "</b> (" + b.getCode() + ") đã hoàn tất.</p>"
+                            + "<p>Giá bán: <b>" + vnd(b.getRentAmount()) + "</b></p>");
+            b.setStatus(to);
+            return;
+        }
         switch (to) {
             case "RENTED" -> {
                 if ("COD".equals(b.getPaymentMethod())) { b.setPaymentStatus("PAID"); b.setDepositStatus("HELD"); }
@@ -197,6 +227,7 @@ public class BookingService {
                     queueRefund(b, b.getTotalAmount());
                 if ("PAID".equals(b.getPaymentStatus())) b.setPaymentStatus("REFUNDED");
                 if ("HELD".equals(b.getDepositStatus())) b.setDepositStatus("REFUNDED");
+                if (isSale(b)) b.getProduct().setStatus(Product.APPROVED);   // huỷ mua → món lên kệ lại
             }
             default -> { }
         }
@@ -241,6 +272,14 @@ public class BookingService {
 
     private void notifyOwnerNewBooking(Booking b) {
         Product p = b.getProduct();
+        if (isSale(b)) {
+            notifications.push(p.getOwner().getId(), "Có người mua " + p.getName() + ", xác nhận đơn " + b.getCode(), "/account?tab=owner&kind=SALE");
+            mailer.send(p.getOwner().getEmail(), "Có người mua " + p.getName(),
+                    "<p>Món thanh lý <b>" + p.getName() + "</b> vừa có người mua (" + b.getCode() + ").</p>"
+                            + "<p>Giá bán: <b>" + vnd(b.getRentAmount()) + "</b> · Thanh toán: " + ("COD".equals(b.getPaymentMethod()) ? "COD" : "Đã chuyển khoản QR") + "</p>"
+                            + "<p><a href=\"" + mailer.link("/account?tab=owner&kind=SALE") + "\">Xác nhận đơn ngay</a></p>");
+            return;
+        }
         notifications.push(p.getOwner().getId(), "Có người thuê " + p.getName() + " (" + b.getStartDate() + " → " + b.getEndDate() + "), xác nhận đơn " + b.getCode(), "/account?tab=owner");
         mailer.send(p.getOwner().getEmail(), "Có người thuê " + p.getName(),
                 "<p>Món <b>" + p.getName() + "</b> vừa được đặt thuê (" + b.getCode() + ").</p>"
@@ -317,6 +356,6 @@ public class BookingService {
                 b.getRecipientName(), b.getPhone(), b.getAddress(), b.getDeliveryMethod(),
                 b.getRefundBankAccount(), b.getRefundBankName(), b.getNote(), b.getRefundAmount(), b.getRefundedAt(),
                 b.getRefundStatus(),
-                reviewRepository.existsByBookingId(b.getId()), b.getCreatedAt());
+                reviewRepository.existsByBookingId(b.getId()), b.getCreatedAt(), b.getKind());
     }
 }

@@ -15,7 +15,8 @@ import java.util.*;
 @Getter @Setter
 public class Product {
 
-    public static final String PENDING = "PENDING", APPROVED = "APPROVED", REJECTED = "REJECTED", HIDDEN = "HIDDEN";
+    public static final String PENDING = "PENDING", APPROVED = "APPROVED", REJECTED = "REJECTED", HIDDEN = "HIDDEN", SOLD = "SOLD";
+    public static final String RENT = "RENT", SALE = "SALE";
     public static final String COLOR = "COLOR", STYLE = "STYLE", OCCASION = "OCCASION", FEATURE = "FEATURE";
 
     @Id
@@ -37,6 +38,8 @@ public class Product {
     @Column(name = "retail_price") private long retailPrice;
     @Column(name = "rent_price_per_day") private long rentPricePerDay;
     @Column(name = "deposit_percent") private int depositPercent = 100;
+    @Column(name = "listing_type", updatable = false) private String listingType = RENT;   // cố định sau khi tạo
+    @Column(name = "sale_price") private long salePrice;
     private String status = PENDING;
     @Column(name = "reject_reason") private String rejectReason;
     @Column(name = "rent_count") private int rentCount;
@@ -63,6 +66,8 @@ public class Product {
     public List<String> tagValues(String type) {
         return tags.stream().filter(t -> t.type().equals(type)).map(Tag::value).sorted().toList();
     }
+
+    public boolean isSale() { return SALE.equals(listingType); }
 
     public String cover() { return images.isEmpty() ? null : images.get(0); }
 }

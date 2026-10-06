@@ -39,14 +39,17 @@ public class ProductService {
     private final R2Storage r2;
 
     public record Filter(String q, String category, String style, String color, String size, Long minPrice,
-                         Long maxPrice, String availability, String sort, int page, int pageSize) {}
+                         Long maxPrice, String availability, String sort, int page, int pageSize, String type) {
+        boolean sale() { return Product.SALE.equals(type); }
+        String priceField() { return sale() ? "salePrice" : "rentPricePerDay"; }
+    }
 
     /** Lọc + phân trang ở DB (page bắt đầu từ 1). */
     public PageResult<Summary> search(Filter f) {
         Sort sort = switch (f.sort() == null ? "new" : f.sort()) {
             case "popular" -> Sort.by(Sort.Direction.DESC, "rentCount");
-            case "priceAsc" -> Sort.by("rentPricePerDay");
-            case "priceDesc" -> Sort.by(Sort.Direction.DESC, "rentPricePerDay");
+            case "priceAsc" -> Sort.by(f.priceField());
+            case "priceDesc" -> Sort.by(Sort.Direction.DESC, f.priceField());
             default -> Sort.by(Sort.Direction.DESC, "createdAt");
         };
         int size = Math.min(Math.max(f.pageSize(), 1), 48);
@@ -60,10 +63,11 @@ public class ProductService {
         return (root, query, cb) -> {
             List<Predicate> ps = new ArrayList<>();
             ps.add(cb.equal(root.get("status"), Product.APPROVED));
+            ps.add(cb.equal(root.get("listingType"), f.sale() ? Product.SALE : Product.RENT));
             if (f.category() != null) ps.add(cb.equal(root.get("category"), f.category()));
             if (f.size() != null) ps.add(cb.equal(root.get("size"), f.size()));
-            if (f.minPrice() != null) ps.add(cb.ge(root.<Long>get("rentPricePerDay"), f.minPrice()));
-            if (f.maxPrice() != null) ps.add(cb.le(root.<Long>get("rentPricePerDay"), f.maxPrice()));
+            if (f.minPrice() != null) ps.add(cb.ge(root.<Long>get(f.priceField()), f.minPrice()));
+            if (f.maxPrice() != null) ps.add(cb.le(root.<Long>get(f.priceField()), f.maxPrice()));
             if (f.style() != null) ps.add(hasTag(root, query, cb, Product.STYLE, f.style()));
             if (f.color() != null) ps.add(hasTag(root, query, cb, Product.COLOR, f.color()));
             if ("available".equals(f.availability()) && !busy.isEmpty()) ps.add(cb.not(root.get("id").in(busy)));
@@ -89,7 +93,7 @@ public class ProductService {
 
     // ponytail: trợ lý AI chấm điểm trong bộ nhớ trên toàn bộ đồ đã duyệt — ổn tới vài nghìn món; hơn thì lọc trước bằng spec().
     public List<Product> approved() {
-        return productRepository.findByStatusOrderByCreatedAtDesc(Product.APPROVED);
+        return productRepository.findByStatusOrderByCreatedAtDesc(Product.APPROVED).stream().filter(p -> !p.isSale()).toList();
     }
 
     public List<UUID> busyToday() {
@@ -100,7 +104,8 @@ public class ProductService {
     public Detail detail(UUID id, UserPrincipal viewer) {
         Product p = find(id);
         boolean privileged = viewer != null && (viewer.isAdmin() || p.getOwner().getId().equals(viewer.getId()));
-        if (!Product.APPROVED.equals(p.getStatus()) && !privileged) throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+        boolean visible = Product.APPROVED.equals(p.getStatus()) || Product.SOLD.equals(p.getStatus());   // đồ đã bán vẫn xem được (link trong đơn mua)
+        if (!visible && !privileged) throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
         return toDetail(p);
     }
 
@@ -117,7 +122,7 @@ public class ProductService {
                 p.getRentCount(), new Owner(o.getId(), o.getName(), o.getAvatarUrl(), o.getTrustScore()),
                 reviews.stream().mapToInt(Review::getRating).average().orElse(0),
                 reviews.stream().map(r -> new ReviewView(names.getOrDefault(r.getUserId(), "Khách"),
-                        r.getRating(), r.getComment(), r.getCreatedAt())).toList());
+                        r.getRating(), r.getComment(), r.getCreatedAt())).toList(), p.getListingType(), p.getSalePrice());
     }
 
     /** Các ngày đã bị khoá (kèm ngày đệm) từ hôm nay — frontend làm mờ trên lịch. */
@@ -137,6 +142,7 @@ public class ProductService {
     public Detail create(UUID ownerId, ProductRequest req) {
         Product p = new Product();
         p.setOwner(userRepository.getReferenceById(ownerId));
+        if (Product.SALE.equals(req.listingType())) p.setListingType(Product.SALE);
         apply(p, req);
         return toDetail(productRepository.save(p));
     }
@@ -145,6 +151,7 @@ public class ProductService {
     public Detail update(UserPrincipal user, UUID id, ProductRequest req) {
         Product p = find(id);
         if (!p.getOwner().getId().equals(user.getId()) && !user.isAdmin()) throw new AppException(ErrorCode.FORBIDDEN);
+        if (Product.SOLD.equals(p.getStatus())) throw new AppException(ErrorCode.VALIDATION_ERROR, "Món đã bán, không sửa được nữa");
         apply(p, req);
         if (!user.isAdmin()) { p.setStatus(Product.PENDING); p.setRejectReason(null); }  // sửa → duyệt lại
         return toDetail(p);
@@ -174,8 +181,15 @@ public class ProductService {
         p.setHipMax(r.hipMax());
         p.setItemCondition(r.itemCondition());
         p.setRetailPrice(r.retailPrice());
-        p.setRentPricePerDay(r.rentPricePerDay());
-        p.setDepositPercent(r.depositPercent());
+        if (p.isSale()) {   // bán đứt: chỉ có giá bán, không giá thuê / cọc
+            if (r.salePrice() < 10_000) throw new AppException(ErrorCode.VALIDATION_ERROR, "Giá bán tối thiểu 10.000₫");
+            p.setSalePrice(r.salePrice());
+            p.setRentPricePerDay(0);
+        } else {
+            if (r.rentPricePerDay() < 10_000) throw new AppException(ErrorCode.VALIDATION_ERROR, "Giá thuê tối thiểu 10.000₫/ngày");
+            p.setRentPricePerDay(r.rentPricePerDay());
+            p.setDepositPercent(r.depositPercent());
+        }
         p.getTags().clear();
         Map<String, List<String>> byType = Map.of(Product.COLOR, r.colors(), Product.STYLE, r.styles(),
                 Product.OCCASION, r.occasions(), Product.FEATURE, features);
@@ -218,7 +232,7 @@ public class ProductService {
         mailer.send(p.getOwner().getEmail(),
                 d.approve() ? "Món đồ của bạn đã được duyệt" : "Món đồ của bạn chưa được duyệt",
                 "<p>Món <b>" + p.getName() + "</b> " + (d.approve()
-                        ? "đã lên kệ và sẵn sàng cho thuê.</p>"
+                        ? (p.isSale() ? "đã lên kệ thanh lý.</p>" : "đã lên kệ và sẵn sàng cho thuê.</p>")
                         : "chưa được duyệt.</p><p>Lý do: " + org.springframework.web.util.HtmlUtils.htmlEscape(String.valueOf(d.reason())) + "</p>")
                         + "<p><a href=\"" + mailer.link("/account?tab=owner") + "\">Xem đồ của tôi</a></p>");
         return toDetail(p);

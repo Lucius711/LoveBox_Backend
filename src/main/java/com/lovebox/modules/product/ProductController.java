@@ -24,7 +24,7 @@ public class ProductController {
         return ApiResponse.success(Vocab.asMap());
     }
 
-    /** availability: available | rented; sort: new | popular | priceAsc | priceDesc */
+    /** type: RENT (mặc định) | SALE; availability: available | rented; sort: new | popular | priceAsc | priceDesc */
     @GetMapping("/products")
     public ApiResponse<PageResult<Summary>> search(@RequestParam(required = false) String q,
                                              @RequestParam(required = false) String category,
@@ -36,9 +36,10 @@ public class ProductController {
                                              @RequestParam(required = false) String availability,
                                              @RequestParam(required = false) String sort,
                                              @RequestParam(defaultValue = "1") int page,
-                                             @RequestParam(defaultValue = "12") int pageSize) {
+                                             @RequestParam(defaultValue = "12") int pageSize,
+                                             @RequestParam(defaultValue = "RENT") String type) {
         return ApiResponse.success(productService.search(new ProductService.Filter(
-                q, category, style, color, size, minPrice, maxPrice, availability, sort, page, pageSize)));
+                q, category, style, color, size, minPrice, maxPrice, availability, sort, page, pageSize, type)));
     }
 
     @GetMapping("/products/{id}")

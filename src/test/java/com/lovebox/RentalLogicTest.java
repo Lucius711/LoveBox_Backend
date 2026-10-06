@@ -46,6 +46,11 @@ class RentalLogicTest {
         assertFalse(RentalRules.canTransition("RETURNED", "COMPLETED", false));  // hoàn cọc chỉ admin
         assertTrue(RentalRules.canTransition("RETURNED", "COMPLETED", true));
         assertFalse(RentalRules.canTransition("COMPLETED", "CANCELLED", true));
+        // đơn mua đồ thanh lý: không qua RENTED/RETURNED, giao xong là hoàn tất
+        assertTrue(RentalRules.canTransitionSale("CONFIRMED", "COMPLETED", false));
+        assertFalse(RentalRules.canTransitionSale("CONFIRMED", "RENTED", false));
+        assertFalse(RentalRules.canTransitionSale("SHIPPING", "CANCELLED", false));
+        assertTrue(RentalRules.canTransitionSale("SHIPPING", "CANCELLED", true));
     }
 
     @Test

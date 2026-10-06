@@ -55,6 +55,17 @@ public final class RentalRules {
             "CONFIRMED", Set.of("CANCELLED"),
             "SHIPPING", Set.of("CANCELLED"));
 
+    // Đơn mua đồ thanh lý: PENDING → CONFIRMED → SHIPPING → COMPLETED (tự đến lấy: CONFIRMED → COMPLETED). Không cọc, không trả đồ.
+    public static final Map<String, Set<String>> SALE_TRANSITIONS = Map.of(
+            "PENDING", Set.of("CONFIRMED", "CANCELLED"),
+            "CONFIRMED", Set.of("SHIPPING", "COMPLETED"),
+            "SHIPPING", Set.of("COMPLETED"));
+
+    public static boolean canTransitionSale(String from, String to, boolean admin) {
+        if (SALE_TRANSITIONS.getOrDefault(from, Set.of()).contains(to)) return true;
+        return admin && Set.of("CONFIRMED", "SHIPPING").contains(from) && "CANCELLED".equals(to);
+    }
+
     public static boolean canTransition(String from, String to, boolean admin) {
         if (OWNER_TRANSITIONS.getOrDefault(from, Set.of()).contains(to)) return true;
         return admin && ADMIN_EXTRA.getOrDefault(from, Set.of()).contains(to);
