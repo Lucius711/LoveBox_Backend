@@ -28,6 +28,11 @@ public class BookingController {
         return ApiResponse.success(bookingService.checkoutStatus(p.getId(), code));
     }
 
+    @PostMapping("/bookings/checkout/{code}/transferred")
+    public ApiResponse<CheckoutResponse> transferred(@AuthenticationPrincipal UserPrincipal p, @PathVariable long code) {
+        return ApiResponse.success("Đã ghi nhận chuyển khoản", bookingService.claimTransferred(p.getId(), code));
+    }
+
     @GetMapping("/bookings/mine")
     public ApiResponse<List<View>> mine(@AuthenticationPrincipal UserPrincipal p) {
         return ApiResponse.success(bookingService.mine(p.getId()));

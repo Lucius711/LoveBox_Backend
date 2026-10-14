@@ -60,6 +60,13 @@ public class AdminController {
     }
 
     /** Admin xác nhận đã chuyển khoản hoàn tiền thủ công. */
+    /** Khách chuyển khoản QR tĩnh → admin thấy tiền về (nội dung LENTIQUE {code}) thì xác nhận cho cả lần đặt. */
+    @PostMapping("/checkouts/{code}/paid")
+    public ApiResponse<Void> markPaid(@PathVariable long code) {
+        bookingService.markPaid(code, null, null, null);
+        return ApiResponse.success("Đã xác nhận nhận tiền", null);
+    }
+
     @PostMapping("/bookings/{id}/refund/confirm")
     public ApiResponse<View> confirmRefund(@PathVariable UUID id, @RequestBody(required = false) Map<String, String> body) {
         return ApiResponse.success("Đã ghi nhận hoàn tiền", bookingService.confirmRefund(id, body == null ? null : body.get("ref")));

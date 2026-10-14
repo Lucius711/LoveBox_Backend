@@ -4,7 +4,6 @@ import com.lovebox.common.constant.ErrorCode;
 import com.lovebox.common.exception.AppException;
 import com.lovebox.modules.booking.BookingDtos.*;
 import com.lovebox.modules.notification.Mailer;
-import com.lovebox.modules.payment.payos.PayOSClient;
 import com.lovebox.modules.product.Vocab;
 import com.lovebox.modules.product.Product;
 import com.lovebox.modules.product.ProductRepository;
@@ -33,7 +32,6 @@ public class BookingService {
     private final ReviewRepository reviewRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
-    private final PayOSClient payOSClient;
     private final Mailer mailer;
     private final com.lovebox.modules.notification.Notifications notifications;
 
@@ -91,15 +89,8 @@ public class BookingService {
             throw new AppException(ErrorCode.BOOKING_DATE_CONFLICT);
         }
 
-        long total = created.stream().mapToLong(Booking::getTotalAmount).sum();
-        if ("PAYOS".equals(req.paymentMethod())) {
-            var link = payOSClient.createPaymentLink(checkoutCode, total, "LENTIQUE " + (checkoutCode % 1_000_000));
-            if (link == null) throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR,
-                    "Không tạo được mã QR thanh toán (PayOS chưa cấu hình?). Hãy chọn COD hoặc thử lại.");
-            created.forEach(b -> { b.setPayosCheckoutUrl(link.checkoutUrl()); b.setPayosQrCode(link.qrCode()); });
-        } else {
-            created.forEach(this::notifyOwnerNewBooking);   // QR: báo chủ đồ khi đã nhận tiền (markPaid)
-        }
+        // "PAYOS" = chuyển khoản QR tĩnh (giữ tên cũ vì CHECK constraint trong DB); báo chủ đồ khi admin xác nhận đã nhận tiền
+        if (!"PAYOS".equals(req.paymentMethod())) created.forEach(this::notifyOwnerNewBooking);
         return toCheckout(created);
     }
 
@@ -130,8 +121,25 @@ public class BookingService {
     }
 
     /**
-     * PayOS webhook báo đã nhận tiền → giữ cọc (HOLD). Idempotent.
-     * Lưu tài khoản người chuyển (nếu PayOS có trả) để sau này hoàn tiền về đúng tài khoản đó.
+     * Khách bấm "Tôi đã chuyển khoản" → VERIFYING (= "On hold" của WooCommerce): giữ lịch, không tự huỷ,
+     * nhưng chủ đồ CHƯA được xử lý cho tới khi admin thấy tiền về và bấm xác nhận ({@link #markPaid}).
+     */
+    @Transactional
+    public CheckoutResponse claimTransferred(UUID renterId, long checkoutCode) {
+        List<Booking> list = bookingRepository.findByCheckoutCode(checkoutCode).stream()
+                .filter(b -> b.getRenter().getId().equals(renterId)).toList();
+        if (list.isEmpty()) throw new AppException(ErrorCode.BOOKING_NOT_FOUND);
+        list.forEach(b -> {
+            if ("PAYOS".equals(b.getPaymentMethod()) && "UNPAID".equals(b.getPaymentStatus()) && !"CANCELLED".equals(b.getStatus())) {
+                b.setPaymentStatus("VERIFYING");
+            }
+        });
+        return toCheckout(list);
+    }
+
+    /**
+     * Admin đối chiếu sao kê, thấy khoản chuyển "LENTIQUE {checkoutCode}" → xác nhận đã nhận tiền → giữ cọc (HOLD). Idempotent.
+     * Có STK người chuyển thì lưu để sau này hoàn tiền về đúng tài khoản đó; không có → dùng STK trong hồ sơ.
      */
     @Transactional
     public void markPaid(long checkoutCode, String payerBin, String payerAccount, String payerBankName) {
@@ -142,10 +150,10 @@ public class BookingService {
                 b.setRefundBankAccount(payerAccount);
                 b.setRefundBankName(payerBankName);
             }
-            if ("UNPAID".equals(b.getPaymentStatus()) && !"CANCELLED".equals(b.getStatus())) {
+            if (List.of("UNPAID", "VERIFYING").contains(b.getPaymentStatus()) && !"CANCELLED".equals(b.getStatus())) {
                 b.setPaymentStatus("PAID");
                 if (!isSale(b)) b.setDepositStatus("HELD");
-                notifyOwnerNewBooking(b);
+                notifyOwnerNewBooking(b);   // tiền đã về mới báo chủ đồ
             }
         });
     }
@@ -163,11 +171,25 @@ public class BookingService {
                 .filter(b -> status == null || b.getStatus().equals(status)).map(this::view).toList();
     }
 
+    /** Như "Hold stock" của WooCommerce: đơn QR quá thời hạn mà khách chưa báo chuyển khoản → tự huỷ, mở lại lịch. */
+    static final java.time.Duration HOLD = java.time.Duration.ofMinutes(60);
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 5 * 60 * 1000)
+    @Transactional
+    public void cancelExpiredUnpaid() {
+        bookingRepository.findByPaymentMethodAndPaymentStatusAndStatusNotAndCreatedAtBefore(
+                "PAYOS", "UNPAID", "CANCELLED", java.time.Instant.now().minus(HOLD))
+                .forEach(b -> apply(b, "CANCELLED", null, null));
+    }
+
     @Transactional
     public View cancelByRenter(UUID renterId, UUID bookingId) {
         Booking b = find(bookingId);
         if (!b.getRenter().getId().equals(renterId)) throw new AppException(ErrorCode.FORBIDDEN);
         if (!"PENDING".equals(b.getStatus())) throw new AppException(ErrorCode.BOOKING_STATUS_TRANSITION_INVALID, "Chỉ huỷ được đơn đang chờ xác nhận");
+        // đã báo chuyển khoản mà huỷ ngay thì không biết tiền về chưa → để admin đối soát rồi huỷ + hoàn
+        if ("VERIFYING".equals(b.getPaymentStatus()))
+            throw new AppException(ErrorCode.BOOKING_STATUS_TRANSITION_INVALID, "Đơn đang đối soát chuyển khoản, nhắn Lentique để huỷ");
         apply(b, "CANCELLED", null, null);
         return view(b);
     }
@@ -183,8 +205,8 @@ public class BookingService {
         if (!ok)
             throw new AppException(ErrorCode.BOOKING_STATUS_TRANSITION_INVALID,
                     "Không thể chuyển từ " + b.getStatus() + " sang " + req.status());
-        if ("PAYOS".equals(b.getPaymentMethod()) && "UNPAID".equals(b.getPaymentStatus()) && !"CANCELLED".equals(req.status()))
-            throw new AppException(ErrorCode.BOOKING_STATUS_TRANSITION_INVALID, "Đơn chưa thanh toán QR, chưa thể xử lý");
+        if ("PAYOS".equals(b.getPaymentMethod()) && List.of("UNPAID", "VERIFYING").contains(b.getPaymentStatus()) && !"CANCELLED".equals(req.status()))
+            throw new AppException(ErrorCode.BOOKING_STATUS_TRANSITION_INVALID, "Đơn chưa xác nhận nhận tiền chuyển khoản, chưa thể xử lý");
         apply(b, req.status(), req.deductionAmount(), req.note());
         return view(b);
     }
@@ -324,7 +346,7 @@ public class BookingService {
                 all.stream().filter(b -> "REFUNDED".equals(b.getDepositStatus())).mapToLong(b -> b.getDepositAmount() - b.getDeductionAmount()).sum(),
                 all.stream().mapToLong(Booking::getDeductionAmount).sum(),
                 all.stream().filter(b -> "PAID".equals(b.getPaymentStatus())).mapToLong(Booking::getRentAmount).sum(),
-                all.stream().filter(b -> "UNPAID".equals(b.getPaymentStatus()) && !"CANCELLED".equals(b.getStatus())).mapToLong(Booking::getTotalAmount).sum(),
+                all.stream().filter(b -> List.of("UNPAID", "VERIFYING").contains(b.getPaymentStatus()) && !"CANCELLED".equals(b.getStatus())).mapToLong(Booking::getTotalAmount).sum(),
                 productRepository.countByStatus(Product.PENDING),
                 all.stream().filter(b -> "PROCESSING".equals(b.getRefundStatus())).count(),
                 all.stream().filter(b -> "DISPUTED".equals(b.getStatus())).count(),
@@ -341,9 +363,10 @@ public class BookingService {
 
     private CheckoutResponse toCheckout(List<Booking> list) {
         Booking first = list.get(0);
-        boolean paid = list.stream().allMatch(b -> !"UNPAID".equals(b.getPaymentStatus()));
+        String status = list.stream().anyMatch(b -> "UNPAID".equals(b.getPaymentStatus())) ? "UNPAID"
+                : list.stream().anyMatch(b -> "VERIFYING".equals(b.getPaymentStatus())) ? "VERIFYING" : "PAID";
         return new CheckoutResponse(first.getCheckoutCode(), list.stream().mapToLong(Booking::getTotalAmount).sum(),
-                first.getPaymentMethod(), paid ? "PAID" : "UNPAID", first.getPayosQrCode(), first.getPayosCheckoutUrl(),
+                first.getPaymentMethod(), status,
                 list.stream().map(this::view).toList());
     }
 

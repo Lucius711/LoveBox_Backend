@@ -34,4 +34,7 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     List<Booking> findAllByOrderByCreatedAtDesc();
 
+    List<Booking> findByPaymentMethodAndPaymentStatusAndStatusNotAndCreatedAtBefore(String paymentMethod, String paymentStatus,
+                                                                                 String status, java.time.Instant before);
+
 }

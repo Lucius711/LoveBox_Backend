@@ -33,7 +33,7 @@ public final class BookingDtos {
                        Instant createdAt, String kind) {}
 
     public record CheckoutResponse(long checkoutCode, long totalAmount, String paymentMethod, String paymentStatus,
-                                   String qrCode, String checkoutUrl, List<View> bookings) {}
+                                   List<View> bookings) {}
 
     /** deductionAmount + note chỉ dùng khi admin chuyển sang DISPUTED/COMPLETED. */
     public record StatusChange(@NotBlank String status, @PositiveOrZero Long deductionAmount, String note) {}

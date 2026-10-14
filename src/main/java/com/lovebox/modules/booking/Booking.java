@@ -54,8 +54,6 @@ public class Booking {
     @Column(name = "refund_bank_name") private String refundBankName;
     @Column(name = "refund_bank_bin") private String refundBankBin;
     private String note;
-    @Column(name = "payos_checkout_url") private String payosCheckoutUrl;
-    @Column(name = "payos_qr_code") private String payosQrCode;
     @Column(name = "refund_amount") private Long refundAmount;
     @Column(name = "refund_ref") private String refundRef;
     @Column(name = "refunded_at") private Instant refundedAt;
